@@ -22,6 +22,7 @@
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
 #include <stdio.h>
+#include "R2CANIDList.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -50,6 +51,8 @@ UART_HandleTypeDef huart2;
 /* USER CODE BEGIN PV */
 uint16_t duty = 0;
 uint8_t isinit = 0;
+FDCAN_RxHeaderTypeDef RxHeader;
+uint8_t RxData[64];
 
 /* USER CODE END PV */
 
@@ -75,13 +78,24 @@ int _write(int file, char *ptr, int len)
 void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim){
 	if(htim->Instance == TIM17){
 		printf("Timer Callback\r\n");
-		if(isinit < 6){
-			duty = 2000;
-			isinit ++;
+
+		duty = 1000;
+	}
+}
+
+void HAL_FDCAN_RxFifo0Callback(FDCAN_HandleTypeDef *hfdcan, uint32_t RxFifo0ITs) {
+	if(hfdcan->Instance == FDCAN1){
+		if(HAL_OK != HAL_FDCAN_GetRxMessage(&hfdcan1, RxFifo0ITs, &RxHeader, RxData)){
+
+			Error_Handler();
 		}
-		else{
-			//duty = 0;
+		if(RxHeader.Identifier == CANID_VACUUMFAN){
+			duty = RxData[0] == 1 ? 2000 : 1000;
 		}
+		HAL_TIM_Base_Stop_IT(&htim17);
+		TIM17->CNT = 0;
+		HAL_TIM_Base_Init(&htim17);
+		HAL_TIM_Base_Start_IT(&htim17);
 	}
 }
 /* USER CODE END 0 */
@@ -119,13 +133,41 @@ int main(void)
   MX_FDCAN1_Init();
   MX_TIM3_Init();
   /* USER CODE BEGIN 2 */
+  //ESC Init
   HAL_TIM_PWM_Start(&htim3, TIM_CHANNEL_2);
-  __HAL_TIM_SET_COMPARE(&htim3, TIM_CHANNEL_2, 1000);
-  HAL_Delay(3000);
-  HAL_TIM_Base_Start_IT(&htim17);
-  //HAL_Delay(3000);
+    __HAL_TIM_SET_COMPARE(&htim3, TIM_CHANNEL_2, 1000);
+    HAL_Delay(3000);
 
-  duty = 1000;
+
+    //FDCAN Init
+  FDCAN_FilterTypeDef sFilterConfig;
+	sFilterConfig.IdType = FDCAN_STANDARD_ID;
+	sFilterConfig.FilterIndex = 0;
+	sFilterConfig.FilterType = FDCAN_FILTER_MASK;
+	sFilterConfig.FilterConfig = FDCAN_FILTER_TO_RXFIFO0;
+
+	//フィルターよくわかんない...
+	sFilterConfig.FilterID1 = CANID_VACUUMFAN;
+	sFilterConfig.FilterID2 = 0x7FF;
+
+
+	if (HAL_FDCAN_ConfigFilter(&hfdcan1, &sFilterConfig) != HAL_OK) {
+		Error_Handler();
+	}
+	if (HAL_FDCAN_ConfigGlobalFilter(&hfdcan1, FDCAN_REJECT, FDCAN_REJECT, FDCAN_FILTER_REMOTE, FDCAN_FILTER_REMOTE) != HAL_OK) {
+		Error_Handler();
+	}
+
+	if (HAL_FDCAN_Start(&hfdcan1) != HAL_OK) {
+		Error_Handler();
+	}
+
+	if (HAL_FDCAN_ActivateNotification(&hfdcan1, FDCAN_IT_RX_FIFO0_NEW_MESSAGE, 0) != HAL_OK) {
+		Error_Handler();
+	}
+
+
+
   /* USER CODE END 2 */
 
   /* Infinite loop */
@@ -133,6 +175,7 @@ int main(void)
   while (1)
   {
 	  __HAL_TIM_SET_COMPARE(&htim3, TIM_CHANNEL_2, duty);
+	  HAL_Delay(10);
 
     /* USER CODE END WHILE */
 
