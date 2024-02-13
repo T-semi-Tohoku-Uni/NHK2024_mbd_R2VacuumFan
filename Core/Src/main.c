@@ -77,25 +77,28 @@ int _write(int file, char *ptr, int len)
 
 void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim){
 	if(htim->Instance == TIM17){
-		printf("Timer Callback\r\n");
+		//printf("Timer Callback\r\n");
 
-		duty = 1000;
+		//duty = 1000;
 	}
 }
 
 void HAL_FDCAN_RxFifo0Callback(FDCAN_HandleTypeDef *hfdcan, uint32_t RxFifo0ITs) {
-	if(hfdcan->Instance == FDCAN1){
-		if(HAL_OK != HAL_FDCAN_GetRxMessage(&hfdcan1, RxFifo0ITs, &RxHeader, RxData)){
-
+	if ((RxFifo0ITs & FDCAN_IT_RX_FIFO0_NEW_MESSAGE) != RESET) {
+			/* Retrieve Rx messages from RX FIFO0 */
+		if (HAL_FDCAN_GetRxMessage(&hfdcan1, FDCAN_RX_FIFO0, &RxHeader, RxData) != HAL_OK) {
 			Error_Handler();
 		}
+		printf("RxID:%x\nRxData: %d\r\n", RxHeader.Identifier, RxData[0]);
 		if(RxHeader.Identifier == CANID_VACUUMFAN){
 			duty = RxData[0] == 1 ? 2000 : 1000;
 		}
+
 		HAL_TIM_Base_Stop_IT(&htim17);
-		TIM17->CNT = 0;
+		TIM17->CNT = 1;
 		HAL_TIM_Base_Init(&htim17);
 		HAL_TIM_Base_Start_IT(&htim17);
+
 	}
 }
 /* USER CODE END 0 */
@@ -146,7 +149,7 @@ int main(void)
 	sFilterConfig.FilterType = FDCAN_FILTER_MASK;
 	sFilterConfig.FilterConfig = FDCAN_FILTER_TO_RXFIFO0;
 
-	//フィルターよくわかんない...
+	//フィルターよくわかんな�?...
 	sFilterConfig.FilterID1 = CANID_VACUUMFAN;
 	sFilterConfig.FilterID2 = 0x7FF;
 
@@ -247,7 +250,7 @@ static void MX_FDCAN1_Init(void)
   /* USER CODE END FDCAN1_Init 1 */
   hfdcan1.Instance = FDCAN1;
   hfdcan1.Init.ClockDivider = FDCAN_CLOCK_DIV1;
-  hfdcan1.Init.FrameFormat = FDCAN_FRAME_CLASSIC;
+  hfdcan1.Init.FrameFormat = FDCAN_FRAME_FD_BRS;
   hfdcan1.Init.Mode = FDCAN_MODE_NORMAL;
   hfdcan1.Init.AutoRetransmission = DISABLE;
   hfdcan1.Init.TransmitPause = DISABLE;
@@ -260,7 +263,7 @@ static void MX_FDCAN1_Init(void)
   hfdcan1.Init.DataSyncJumpWidth = 1;
   hfdcan1.Init.DataTimeSeg1 = 15;
   hfdcan1.Init.DataTimeSeg2 = 4;
-  hfdcan1.Init.StdFiltersNbr = 0;
+  hfdcan1.Init.StdFiltersNbr = 1;
   hfdcan1.Init.ExtFiltersNbr = 0;
   hfdcan1.Init.TxFifoQueueMode = FDCAN_TX_FIFO_OPERATION;
   if (HAL_FDCAN_Init(&hfdcan1) != HAL_OK)
