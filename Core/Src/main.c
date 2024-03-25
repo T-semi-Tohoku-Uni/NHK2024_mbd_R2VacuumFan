@@ -22,6 +22,7 @@
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
 #include <stdio.h>
+#include <math.h>
 #include "R2CANIDList.h"
 /* USER CODE END Includes */
 
@@ -46,6 +47,7 @@ ADC_HandleTypeDef hadc2;
 FDCAN_HandleTypeDef hfdcan1;
 
 TIM_HandleTypeDef htim2;
+TIM_HandleTypeDef htim6;
 TIM_HandleTypeDef htim17;
 
 UART_HandleTypeDef huart2;
@@ -55,6 +57,7 @@ uint16_t duty = 0;
 uint8_t isinit = 0;
 FDCAN_RxHeaderTypeDef RxHeader;
 uint8_t RxData[64];
+float temp;
 
 /* USER CODE END PV */
 
@@ -66,8 +69,9 @@ static void MX_TIM17_Init(void);
 static void MX_FDCAN1_Init(void);
 static void MX_ADC2_Init(void);
 static void MX_TIM2_Init(void);
+static void MX_TIM6_Init(void);
 /* USER CODE BEGIN PFP */
-
+float calculateTemperature(void);
 /* USER CODE END PFP */
 
 /* Private user code ---------------------------------------------------------*/
@@ -84,6 +88,10 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim){
 
 		//duty = 1000;
 	}
+	if(htim == &htim6){
+		float gain = 0.8;
+		temp = temp * gain + (1 - gain) * calculateTemperature();
+	}
 }
 
 void HAL_FDCAN_RxFifo0Callback(FDCAN_HandleTypeDef *hfdcan, uint32_t RxFifo0ITs) {
@@ -92,18 +100,31 @@ void HAL_FDCAN_RxFifo0Callback(FDCAN_HandleTypeDef *hfdcan, uint32_t RxFifo0ITs)
 		if (HAL_FDCAN_GetRxMessage(&hfdcan1, FDCAN_RX_FIFO0, &RxHeader, RxData) != HAL_OK) {
 			Error_Handler();
 		}
-		printf("RxID:%x\nRxData: %d\r\n", RxHeader.Identifier, RxData[0]);
+		//printf("RxID:%x\nRxData: %d\r\n", RxHeader.Identifier, RxData[0]);
 		if(RxHeader.Identifier == CANID_VACUUMFAN){
 			duty = RxData[0] == 1 ? 2000 : 1000;
 		}
-		/*
-		HAL_TIM_Base_Stop_IT(&htim17);
-		TIM17->CNT = 1;
-		HAL_TIM_Base_Init(&htim17);
-		HAL_TIM_Base_Start_IT(&htim17);
-		*/
-
 	}
+}
+
+
+float calculateTemperature(void) {
+	HAL_ADC_Start(&hadc2);
+	if( HAL_ADC_PollForConversion(&hadc2, 1000) != HAL_OK )
+	{
+		Error_Handler();
+	}
+	uint16_t aVal = HAL_ADC_GetValue(&hadc2);
+	const float B = 3435;
+	const float R0 = 500;
+	const float R1 = 10000;
+
+    HAL_ADC_Stop(&hadc2);
+
+    float voltage = aVal * 3.3 / 4096; // ADC値を電圧に変換
+    float resistance = voltage / (3.3 - voltage) * R0; // 電圧から抵抗�??????��?��??��?��???��?��??��?��????��?��??��?��???��?��??��?��に変換
+    float temperature = 1 / (1 / (273.15 + 25) + log(resistance / R1) / B); // 温度を計�?
+    return temperature - 273.15; // 温度を摂氏に変換して返す
 }
 /* USER CODE END 0 */
 
@@ -140,12 +161,16 @@ int main(void)
   MX_FDCAN1_Init();
   MX_ADC2_Init();
   MX_TIM2_Init();
+  MX_TIM6_Init();
   /* USER CODE BEGIN 2 */
   HAL_TIM_PWM_Start(&htim2, TIM_CHANNEL_2);
   //ESC Init
   HAL_TIM_PWM_Start(&htim2, TIM_CHANNEL_4);
     __HAL_TIM_SET_COMPARE(&htim2, TIM_CHANNEL_4, 18999);
+    temp = calculateTemperature();
     HAL_Delay(3000);
+
+    HAL_TIM_Base_Start_IT(&htim6);
 
 
     //FDCAN Init
@@ -155,7 +180,7 @@ int main(void)
 	sFilterConfig.FilterType = FDCAN_FILTER_MASK;
 	sFilterConfig.FilterConfig = FDCAN_FILTER_TO_RXFIFO0;
 
-	//フィルターよくわかんな?��?...
+	//フィルターよくわかんな???????��?��??��?��???��?��??��?��????��?��??��?��???��?��??��?��?????��?��??��?��???��?��??��?��????��?��??��?��???��?��??��?��??????��?��??��?��???��?��??��?��????��?��??��?��???��?��??��?��?????��?��??��?��???��?��??��?��????��?��??��?��???��?��??��?��?...
 	sFilterConfig.FilterID1 = CANID_VACUUMFAN;
 	sFilterConfig.FilterID2 = 0x7FF;
 
@@ -183,8 +208,19 @@ int main(void)
   /* USER CODE BEGIN WHILE */
   while (1)
   {
+	  __disable_irq();
+	  if(temp > 85){
+		  duty = 3000;
+	  }
+	  else if(temp > 50){
+
+	  }
 	  __HAL_TIM_SET_COMPARE(&htim2, TIM_CHANNEL_4, duty);
+	  __enable_irq();
+
 	  HAL_Delay(10);
+
+	  printf("Temp:%f\r\n", temp);
 
     /* USER CODE END WHILE */
 
@@ -282,10 +318,10 @@ static void MX_ADC2_Init(void)
 
   /** Configure Regular Channel
   */
-  sConfig.Channel = ADC_CHANNEL_3;
+  sConfig.Channel = ADC_CHANNEL_4;
   sConfig.Rank = ADC_REGULAR_RANK_1;
   sConfig.SamplingTime = ADC_SAMPLETIME_2CYCLES_5;
-  sConfig.SingleDiff = ADC_DIFFERENTIAL_ENDED;
+  sConfig.SingleDiff = ADC_SINGLE_ENDED;
   sConfig.OffsetNumber = ADC_OFFSET_NONE;
   sConfig.Offset = 0;
   if (HAL_ADC_ConfigChannel(&hadc2, &sConfig) != HAL_OK)
@@ -391,6 +427,44 @@ static void MX_TIM2_Init(void)
 
   /* USER CODE END TIM2_Init 2 */
   HAL_TIM_MspPostInit(&htim2);
+
+}
+
+/**
+  * @brief TIM6 Initialization Function
+  * @param None
+  * @retval None
+  */
+static void MX_TIM6_Init(void)
+{
+
+  /* USER CODE BEGIN TIM6_Init 0 */
+
+  /* USER CODE END TIM6_Init 0 */
+
+  TIM_MasterConfigTypeDef sMasterConfig = {0};
+
+  /* USER CODE BEGIN TIM6_Init 1 */
+
+  /* USER CODE END TIM6_Init 1 */
+  htim6.Instance = TIM6;
+  htim6.Init.Prescaler = 79;
+  htim6.Init.CounterMode = TIM_COUNTERMODE_UP;
+  htim6.Init.Period = 999;
+  htim6.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_DISABLE;
+  if (HAL_TIM_Base_Init(&htim6) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  sMasterConfig.MasterOutputTrigger = TIM_TRGO_RESET;
+  sMasterConfig.MasterSlaveMode = TIM_MASTERSLAVEMODE_DISABLE;
+  if (HAL_TIMEx_MasterConfigSynchronization(&htim6, &sMasterConfig) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  /* USER CODE BEGIN TIM6_Init 2 */
+
+  /* USER CODE END TIM6_Init 2 */
 
 }
 
