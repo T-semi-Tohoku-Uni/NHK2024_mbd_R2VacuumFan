@@ -38,7 +38,8 @@
 
 /* Private macro -------------------------------------------------------------*/
 /* USER CODE BEGIN PM */
-
+#define FAN_ON 17999
+#define FAN_OFF 18999
 /* USER CODE END PM */
 
 /* Private variables ---------------------------------------------------------*/
@@ -102,7 +103,7 @@ void HAL_FDCAN_RxFifo0Callback(FDCAN_HandleTypeDef *hfdcan, uint32_t RxFifo0ITs)
 		}
 		//printf("RxID:%x\nRxData: %d\r\n", RxHeader.Identifier, RxData[0]);
 		if(RxHeader.Identifier == CANID_VACUUMFAN){
-			duty = RxData[0] == 1 ? 2000 : 1000;
+			duty = RxData[0] == 1 ? FAN_ON : FAN_OFF;
 		}
 	}
 }
@@ -166,7 +167,7 @@ int main(void)
   HAL_TIM_PWM_Start(&htim2, TIM_CHANNEL_2);
   //ESC Init
   HAL_TIM_PWM_Start(&htim2, TIM_CHANNEL_4);
-    __HAL_TIM_SET_COMPARE(&htim2, TIM_CHANNEL_4, 18999);
+    __HAL_TIM_SET_COMPARE(&htim2, TIM_CHANNEL_4, FAN_OFF);
     temp = calculateTemperature();
     HAL_Delay(3000);
 
@@ -210,7 +211,10 @@ int main(void)
   {
 	  __disable_irq();
 	  if(temp > 85){
-		  duty = 3000;
+		  duty = FAN_OFF;
+		  while(calculateTemperature() > 70){
+			  HAL_Delay(100)
+		  }
 	  }
 	  else if(temp > 50){
 
