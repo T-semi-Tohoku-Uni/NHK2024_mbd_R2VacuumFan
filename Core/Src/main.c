@@ -210,14 +210,15 @@ int main(void)
   while (1)
   {
 	  __disable_irq();
+	  if(temp > 50){
+		  uint16_t duty2 = (temp - 50) * 400;
+		  __HAL_TIM_SET_COMPARE(&htim2, TIM_CHANNEL_2, duty2);
+	  }
 	  if(temp > 85){
 		  duty = FAN_OFF;
 		  while(calculateTemperature() > 70){
-			  HAL_Delay(100)
+			  HAL_Delay(100);
 		  }
-	  }
-	  else if(temp > 50){
-
 	  }
 	  __HAL_TIM_SET_COMPARE(&htim2, TIM_CHANNEL_4, duty);
 	  __enable_irq();
