@@ -103,7 +103,7 @@ void HAL_FDCAN_RxFifo0Callback(FDCAN_HandleTypeDef *hfdcan, uint32_t RxFifo0ITs)
 		}
 		//printf("RxID:%x\nRxData: %d\r\n", RxHeader.Identifier, RxData[0]);
 		if(RxHeader.Identifier == CANID_VACUUMFAN){
-			duty = RxData[0] == 1 ? FAN_ON : FAN_OFF;
+			duty = (RxData[0] == 1) ? FAN_ON : FAN_OFF;
 		}
 	}
 }
@@ -220,10 +220,10 @@ int main(void)
 			  HAL_Delay(100);
 		  }
 	  }
-	  __HAL_TIM_SET_COMPARE(&htim2, TIM_CHANNEL_4, duty);
 	  __enable_irq();
+	  __HAL_TIM_SET_COMPARE(&htim2, TIM_CHANNEL_4, duty);
 
-	  HAL_Delay(10);
+	  HAL_Delay(100);
 
 	  printf("Temp:%f\r\n", temp);
 
