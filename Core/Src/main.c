@@ -40,6 +40,9 @@
 /* USER CODE BEGIN PM */
 #define FAN_ON 17999
 #define FAN_OFF 18999
+
+#define TRUE 1
+#define FALSE 0
 /* USER CODE END PM */
 
 /* Private variables ---------------------------------------------------------*/
@@ -59,6 +62,8 @@ uint8_t isinit = 0;
 FDCAN_RxHeaderTypeDef RxHeader;
 uint8_t RxData[64];
 float temp;
+
+uint8_t is_can_alive = TRUE;
 
 /* USER CODE END PV */
 
@@ -84,10 +89,16 @@ int _write(int file, char *ptr, int len)
 }
 
 void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim){
-	if(htim->Instance == TIM17){
-		//printf("Timer Callback\r\n");
-
-		//duty = 1000;
+	if(htim == &htim17){
+//		printf("Timer Callback\r\n");
+		if(is_can_alive == TRUE){
+			is_can_alive = FALSE;
+			printf("CAN is alive\r\n");
+		}
+		else{
+			printf("CAN is NOT alive\r\n");
+			duty = FAN_OFF;
+		}
 	}
 	if(htim == &htim6){
 		float gain = 0.8;
@@ -173,7 +184,7 @@ int main(void)
     printf("Initialized\r\n");
 
     HAL_TIM_Base_Start_IT(&htim6);
-
+    HAL_TIM_Base_Start_IT(&htim17);
 
     //FDCAN Init
   FDCAN_FilterTypeDef sFilterConfig;
